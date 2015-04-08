@@ -6,7 +6,6 @@ On cook stop I should gzip the cook log.
 Add description to new cook.
 Check JSON error parsing in log file.
 View old cooks.
-Add title
 Change cook title to Stoker name
 Move set_temp to ajax, perhaps have a loading/error icon.
 Delete old cooks?
@@ -25,7 +24,8 @@ Buttons should be disable-on-click.
   if ( isset($cook_to_show)) {
     include "show_graph.php";
   }
- 
+
+  print "<title>stoker_mon Main Page</title>";
   // Only if you've got full access should you show the Stokers and allow 
   // a cook to be started.
   if ( $mode == 'full' ) { 

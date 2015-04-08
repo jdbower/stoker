@@ -9,21 +9,50 @@ This should fix most font issues, but Chrome's default font in Win8 is pretty
 bad and has few UTF-8 characters. Change it to Tahoma if you have problems.
 -->
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link rel="stylesheet" type="text/css" href="stoker.css">
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
 <script src="js/highcharts.js"></script>
 
+<!-- Spacer that holds the control tab -->
+<div id="tab_div" class="tab-div"></div>
+
+<!-- The graph container -->
 <div id="container" style="width:100%; height:80%;"></div>
-<div id="control" align="center" style="width:100%; display: none"></div>
+
 <div id="control_output" align="center" style="width:100%; height:100px; display: none">
 <iframe id="control_output_frame"></iframe>
+</div>
 
+<!-- Cook control tab -->
+<div id="control_tab" class="show-menu" onClick="toggle_menu();">Cook Controls</div>
+
+<!-- Background div when the menu is up -->
+<div id="menu_background" class="menu-background-div" onClick="toggle_menu();">
+  <!-- Container div to help center the menu -->
+  <div id="menu_container" class="menu-container-div">
+    <!-- The actual menu -->
+    <div id="menu" class="menu-div" onClick="event.stopPropagation();">
+      <h3>Probe List</h3>
+      <!-- Shows a list of sensors and temperature -->
+      <div id="sensor_menu"></div>
+      <h3>Blower List</h3>
+      <!-- Shows a list of blowers and associations -->
+      <div id="blower_menu"></div>
+    </div>
+  </div>
 </div>
 <script>
 /*
 Bug tracker:
 I can't seem to get connectNulls=false to work.
 Better error checking.
-Rather than use the "control" div, I should move it to the side and make it auto-hide. What I have now works, but is ugly.
+I need to work on getting fan_mode=1m_dutycycle when polling the JSON
+I need to change the probe name to a text input onClick and handle name changes
+I need to list old cooks.
+Anyplace else I should be using CSS? Check for style=
+Stop Cook should be moved to Cook Controls, should Start Cook?
+Can I allow a blower to be uncontrolled? potentially an option with sensor ID "-remove"?
+Add indicator to blower as to which probe is controlling it.
 */
 
 <?php
@@ -35,6 +64,11 @@ var mode = \"".$mode."\";
 var authenticated = \"".$_SESSION['authenticated']."\";
 ";
 ?>
+
+// If you've got the access, show the control div
+if ( mode == 'full' ) {
+  document.getElementById('control_tab').style.display = 'block';
+}
 
 // The actual graph object.
 var chart;
@@ -54,7 +88,71 @@ function set_target(id) {
   // This should probably be an AJAX call...
   url = "set_temp.php?cook="+cook_to_show+"&id="+id+"&target="+target;
   document.getElementById('control_output_frame').src=url;
-  console.log(url);
+}
+
+// Sets a target temperature for a sensor
+function set_blower(id) {
+  controller = document.getElementById(id).value;
+  // This should probably be an AJAX call...
+  url = "set_blower.php?cook="+cook_to_show+"&id="+id+"&controller="+controller;
+  document.getElementById('control_output_frame').src=url;
+}
+
+function toggle_menu() {
+  var m = document.getElementById("menu");
+  var b = document.getElementById("menu_background");
+  if(m.style.display == 'block') {
+    m.style.display = 'none';
+    b.style.display = 'none';
+  } else {
+    // Take the latest stoker_reading and generate the list of current 
+    // sensors and blowers, we don't want to try to set sensors that aren't
+    // in the latest poll.
+    sensor_list = stoker_reading["stoker"]["sensors"];
+    blower_list = stoker_reading["stoker"]["blowers"];
+    sensor_menu = document.getElementById("sensor_menu");
+    // We use the sensor/blower_html variables to build a table.
+    sensor_html = "<table>";
+    blower_menu = document.getElementById("blower_menu");
+    blower_html = "<table>";
+    // Walk the sensor list.
+    for (i = 0; i < sensor_list.length; ++i) {
+      id = sensor_list[i]["id"];
+      name = sensor_list[i]["name"];
+      setting = sensor_list[i]["ta"];
+      sensor_control = "<tr><td>"+name+"</td><td><input id='"+id+"' type='number' min='0' max='999' style='text-align: right;' size='3' value='"+setting+"'></td><td><img src='ok-button.png' class='ok-button' onClick='set_target(\""+id+"\");'></td></tr>";
+      sensor_html += sensor_control;
+    }
+    sensor_html += "</table>";
+    // Now set the HTML of the sensor menu div to the HTML we just built.
+    sensor_menu.innerHTML = sensor_html;
+    // Walk the blower list.
+    for (i = 0; i < blower_list.length; ++i) {
+      id = blower_list[i]["id"];
+      name = blower_list[i]["name"];
+      blower_control = "<tr><td>"+name+"</td><td><select id='"+id+"'>";
+      // We need to walk the sensor list to build the select.
+      for (c = 0; c < sensor_list.length; c++ ) {
+        sensor_id = sensor_list[c]["id"];
+        sensor_name = sensor_list[c]["name"];
+        // For some reason they associate the blower to the sensor rather than
+        // the sensor to the blower. If we hit the right sensor mark it as
+        // selected.
+        if ( sensor_list[c]["blower"] == id) {
+          sensor_selected = " selected";
+        } else {
+          sensor_selected = "";
+        }
+        blower_control += "<option value='"+sensor_id+"'"+sensor_selected+">"+sensor_name+"</option>";
+      }
+      blower_control += "</select></td><td><img src='ok-button.png' class='ok-button' onClick='set_blower(\""+id+"\");'></td></tr>";
+      blower_html += blower_control;
+    }
+    blower_html += "</table>";
+    blower_menu.innerHTML = blower_html;
+    m.style.display = 'block';
+    b.style.display = 'block';
+  }
 }
 
 // Make sure we've got a series and add a datapoint
@@ -85,16 +183,6 @@ function add_point(series_id, series_name, x, y, type, redraw) {
       },
       data: []
     },redraw);
-    // If you've got the access, add a button to set a target.
-    if (( mode == 'full' ) && 
-      (series_id.match(/.*_target$/) != null)) {
-      control_div = document.getElementById('control');
-      // I'm just stacking buttons on top of each other here. This could be
-      // done more intelligently, I'm sure.
-      control_def = series_name+" <input id='"+series_id+"' type='text' size='3' value='"+y+"'><button onClick='set_target(\""+series_id+"\");'>Set</button><br>";
-      control_div.innerHTML += control_def;
-      control_div.style.display = 'block';
-    }
     id_list.push(series_id);
     series = chart.get(series_id);
   }
@@ -103,16 +191,6 @@ function add_point(series_id, series_name, x, y, type, redraw) {
   point = JSON.parse('['+x+','+y+']');
   timestamp_list[id_list.indexOf(series_id)] = x;
   series.addPoint(point, redraw, false);
-  // Here we check to see if the target temp has changed and update the 
-  // text box appropriately. 
-  if (( mode == 'full' ) && 
-    (series_id.match(/.*_target$/) != null)) {
-    set_field = document.getElementById(series_id);
-    // Please don't change the field as I'm typing. kthxbai!
-    if (( set_field.value != y ) && ( set_field != document.activeElement )) {
-      set_field.value = y;
-    }
-  }
 }
 
 // Much of this is from the Highcharts sample code. Grabs data from the 
@@ -263,8 +341,7 @@ $(document).ready(function() {
             minPadding: 0.2,
             maxPadding: 0.2,
             title: {
-                text: 'Fan',
-                margin: 80
+              enabled: false
             },
             opposite: true,
             labels: {
