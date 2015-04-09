@@ -1,0 +1,39 @@
+<?php
+$curl_json = curl_init();
+curl_setopt($curl_json, CURLOPT_CONNECTTIMEOUT, 10); 
+curl_setopt($curl_json, CURLOPT_URL, 'http://172.16.14.10/stoker.json');
+curl_setopt($curl_json, CURLOPT_RETURNTRANSFER, true);
+$json_resp = curl_exec($curl_json);
+$resp_info = curl_getinfo($curl_json);
+curl_close($curl_json);
+
+if ( $resp_info['http_code'] == 200 ) {
+  if ( $_GET["blower_mode"] == "1m.duty" ) {
+    $resp = json_decode($json_resp, true);
+    foreach ( $resp["stoker"]["blowers"] as &$blower ) {
+      foreach ( $resp["stoker"]["sensors"] as $sensor ) {
+        if ( $sensor["blower"] == $blower["id"] ) {
+          $sensor_id = $sensor["id"];
+        }
+      }
+      if ( isset($sensor_id) ) {
+        $filename = "/tmp/".$sensor_id.".fan";
+        if ( file_exists($filename) ) {
+          if ( time() - filemtime($filename) < 60 ) {
+            $duty_cycle = floatval(file_get_contents($filename));
+          }
+        }
+      }
+      if ( ! isset($duty_cycle) ) { 
+        $duty_cycle = 0;
+      }
+      $blower["on"] = $duty_cycle;
+    }
+    $json_resp = json_encode($resp);
+  }
+  print $json_resp;
+} else {
+var_dump($responseInfo);
+}
+
+?>
