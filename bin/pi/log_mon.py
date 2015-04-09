@@ -1,7 +1,15 @@
+#!/usr/bin/python
+
 import telnetlib
 import time
 import os
+import sys
 import threading
+import logging
+
+logging.basicConfig(filename='/tmp/log_mon.log', level=logging.INFO)
+
+# I should add a keyboard interrupt handler
 
 # The main datapoint array
 datapoints = {}
@@ -62,56 +70,72 @@ def update_datapoint(id, state):
     datapoints[id] = [];
     datapoints[id].append(new_point)
 
+def open_connect():
+  global session
+  global host
+  logging.info("Opening connection to "+host+"...")
+  while (session is None) or (session.get_socket() is None):
+    try:
+      session = telnetlib.Telnet(host, 23, timeout)
+    except socket.timeout:
+      logging.error("socket timeout")
+    else:
+      logging.info("Connected...waiting for login")
+      time.sleep(30)
+      logging.info("Sending login.")
+      session.write("root\r")
+      time.sleep(1)
+      logging.info("Sending password.")
+      session.write("tini\r")
+      time.sleep(10)
+      logging.info("Sending bbq command.")
+      session.write("bbq\r")
+      time.sleep(10)
+      session.write("bbq -temps \r\r")
+      time.sleep(10)
+      logging.info("Reading data.")
+
+if len(sys.argv) != 2:
+  logging.error("Usage: "+sys.argv[0]+" [ip_address]")
+  sys.exit()
+host    = sys.argv[1]
+timeout = 10
+session = None
+
 # Start the update thread.
 update_var()
-  
-print ("Starting Client...")
-host    = "172.16.14.10"
-timeout = 10
 
-print ("Connecting...")
-try:
-    session = telnetlib.Telnet(host, 23, timeout)
-except socket.timeout:
-    print ("socket timeout")
-else:
-    print ("Connected...waiting for login")
-    time.sleep(30)
-    print ("Sending login.")
-    session.write("root\r")
-    time.sleep(1)
-    print ("Sending password.")
-    session.write("tini\r")
-    time.sleep(1)
-    print ("Sending bbq command.")
-    session.write("bbq -temps\r")
-    print ("Reading data.")
+logging.info("Connecting...")
+open_connect()
 
-    while True:
-      line = session.read_until("\n",timeout);
-      if len(line.strip()) != 0:
-# Uncomment to debug
-#        print(str(len(line))+" "+str(int(time.time()))+" "+line);
-        # I have no idea why these don't work when they work above...
-        if line.endswith("login: "):
-          print ("Sending login.")
-          try:
-            session.write("root\r")
-          except:
-            print ("Couldn't login")
-        if line.endswith("password: "):
-          print ("Sending password.")
-          session.write("tini\r")
-        if line.endswith("/> "):
-          print ("Starting BBQ.")
-          session.write("bbq -temps\r")
+while True:
+  if (session.get_socket() is None):
+    open_connect()
+  line = session.read_until("\n",timeout);
+  if len(line.strip()) != 0:
+    # Uncomment to debug
+    logging.debug(str(len(line))+" "+str(int(time.time()))+" "+line)
+    # I have no idea why these don't work when they work above...
+    if line.endswith("login: "):
+      logging.info("Sending login.")
+      try:
+        session.write("root\r")
+      except:
+        logging.error("Couldn't login")
+    if line.endswith("password: "):
+      logging.info("Sending password.")
+      session.write("tini\r")
+    if line.endswith("/> "):
+      logging.info("Starting BBQ.")
+      session.write("bbq -temps\r")
 
-        line_arr = line.rsplit(' ', 1)
-        last_word = line_arr[-1].strip()
-        if (last_word.startswith("blwr:")):
-          # The very first messaure starts with the prompt, so we need to grab
-          # the last word after the split by colon
-          sensorid = line_arr[0].split(':', 1)[0].rsplit(' ',1)[-1]
-          status = last_word.split(':', 1)[1]
-          if len(sensorid) == 16:
-            update_datapoint(sensorid,status)
+    line_arr = line.rsplit(' ', 1)
+    last_word = line_arr[-1].strip()
+    if (last_word.startswith("blwr:")):
+      # The very first messaure starts with the prompt, so we need to grab
+      # the last word after the split by colon
+      sensorid = line_arr[0].split(':', 1)[0].rsplit(' ',1)[-1]
+      status = last_word.split(':', 1)[1]
+      if len(sensorid) == 16:
+        update_datapoint(sensorid,status)
+
