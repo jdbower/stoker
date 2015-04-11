@@ -2,13 +2,8 @@
 /* 
 TO-DO:
 Do I still need main.php or can I move it back to index.php?
-On cook stop I should gzip the cook log.
-Add description to new cook.
 Check JSON error parsing in log file.
-View old cooks.
-Change cook title to Stoker name
 Move set_temp to ajax, perhaps have a loading/error icon.
-Delete old cooks?
 I populate variables a lot, I should split ini.php to ini.php and check_login.php
 Buttons should be disable-on-click.
 5 second delay should be variable.
@@ -16,16 +11,35 @@ Buttons should be disable-on-click.
 
   // Confirm session properties and initialize variables
   include "ini.php";
+
+  print '<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<link rel="stylesheet" type="text/css" href="stoker.css">
+<title>stoker_mon Main Page</title>';
+
   // If you're not logged in, present the login button.
   if ( ! isset($_SESSION["authenticated"])) {
     include "login.php";
   }
+
+  // Add the Old Cooks tab
+  if ( $mode != 'none' ) {
+    // The bottom tab is for all users, the top tab is for admins.
+    print "<div id='bottom_tab' class='bottom-tab-div'></div>";
+    print "<div id='cooks_tab' class='show-bottom-menu' onClick='toggle_cooks();'>Show Old Cooks</div>";
+  }
+
   // If there's a cook_to_show, show it.
   if ( isset($cook_to_show)) {
+    $display_name = $cook_to_show;
+    if ( file_exists($cook_path.'/'.$cook_to_show.'.ini') ) {
+      $cook_data = parse_ini_file($cook_path.'/'.$cook_to_show.'.ini');
+      if ( isset($cook_data["display_name"]) ) {
+        $display_name = $cook_data["display_name"];
+      }
+    }
     include "show_graph.php";
   }
 
-  print "<title>stoker_mon Main Page</title>";
   // Only if you've got full access should you show the Stokers and allow 
   // a cook to be started.
   if ( $mode == 'full' ) { 

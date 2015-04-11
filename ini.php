@@ -32,13 +32,19 @@ function get_active_cooks() {
     $active_cooks[$ip]["log"] = $log;
     $active_cooks[$ip]["cook_name"] = $cook_name;
     $cook_to_show = $cook_name;
-    $active_cook = true;
   }
 }
 
-
   get_active_cooks();
 
+  if (isset($_POST["cook_to_show"])) {
+    $cook_to_show = $_POST["cook_to_show"];
+  }
+
+  if (isset($_GET["cook_to_show"])) {
+    $cook_to_show = $_GET["cook_to_show"];
+  }
+ 
   foreach ($ini_array["devices"] as $id => $stoker) {
     $ip = explode(',',$stoker)[0];
     $name = explode(',',$stoker)[1];
@@ -77,7 +83,6 @@ function get_active_cooks() {
     exec("kill $pid");
     sleep(5);
     $stokers[$id]["active"] = false;
-// TO-DO: If this was the cook_to_show we should set active_cook = false;
     get_active_cooks();
   }
 
@@ -86,6 +91,13 @@ function get_active_cooks() {
     if ( preg_match('/.*\.log$/', $logfile) ) {
       $cook_name = basename($logfile,'.log');
       $old_cooks[$cook_name]["logfile"] = $logfile;
+    }
+  }
+
+  $active_cook = "false";
+  foreach ( $active_cooks as $cook ) {
+    if ( $cook_to_show == $cook["cook_name"] ) {
+      $active_cook = "true";
     }
   }
 ?>
